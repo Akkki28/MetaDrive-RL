@@ -1,0 +1,33 @@
+{
+  "out": "goal_dataset",
+  "samples_per_class": 3000,
+  "max_episodes": 100000,
+  "episodes_per_env": 10,
+  "max_steps": 1500,
+  "horizon_s": 5.0,
+  "history": 3,
+  "lidar_history": true,
+  "num_lasers": 240,
+  "lidar_range": 50.0,
+  "num_others": 6,
+  "checkpoints": true,
+  "checkpoint_dists": [
+    15.0,
+    30.0,
+    50.0
+  ],
+  "stride": 2,
+  "skip_start_s": 1.0,
+  "max_per_episode_class": 150,
+  "turn_thr": 0.3,
+  "dv_abs": 2.0,
+  "dv_rel": 0.15,
+  "accident_prob": 0.0,
+  "val_pct": 10,
+  "shard_size": 5000,
+  "gzip": false,
+  "start_seed": 0,
+  "seed": 0,
+  "render": false,
+  "smoke_test": false
+}
