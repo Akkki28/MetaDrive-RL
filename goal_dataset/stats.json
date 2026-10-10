@@ -1,13 +1,13 @@
 {
-  "total": 21000,
+  "total": 70000,
   "per_class": {
-    "go_straight": 3000,
-    "go_straight_fast": 3000,
-    "go_straight_slow": 3000,
-    "turn_left": 3000,
-    "turn_right": 3000,
-    "lane_change_left": 3000,
-    "lane_change_right": 3000
+    "go_straight": 10000,
+    "go_straight_fast": 10000,
+    "go_straight_slow": 10000,
+    "turn_left": 10000,
+    "turn_right": 10000,
+    "lane_change_left": 10000,
+    "lane_change_right": 10000
   },
   "per_class_fraction": {
     "go_straight": 0.1429,
@@ -19,179 +19,275 @@
     "lane_change_right": 0.1429
   },
   "splits": {
-    "val": 2266,
-    "train": 18734
+    "val": 7172,
+    "train": 62828
   },
   "per_regime": {
     "highway|dense": {
-      "go_straight_fast": 312,
-      "lane_change_right": 260,
-      "go_straight": 672,
-      "turn_right": 1038,
-      "lane_change_left": 354,
-      "turn_left": 414,
-      "go_straight_slow": 252
-    },
-    "curvy|dense": {
-      "lane_change_right": 191,
-      "turn_left": 611,
-      "go_straight_slow": 236,
-      "go_straight": 291,
-      "go_straight_fast": 281,
-      "lane_change_left": 140,
-      "turn_right": 789
-    },
-    "urban_x|normal": {
-      "go_straight_fast": 573,
-      "go_straight": 622,
-      "go_straight_slow": 465,
-      "turn_right": 341,
-      "turn_left": 243,
-      "lane_change_right": 70,
-      "lane_change_left": 9
-    },
-    "urban_t|empty": {
-      "go_straight_fast": 417,
-      "lane_change_right": 68,
-      "go_straight_slow": 233,
-      "turn_right": 623,
-      "go_straight": 446,
-      "turn_left": 318,
-      "lane_change_left": 75
-    },
-    "roundabout|empty": {
-      "go_straight_fast": 218,
-      "lane_change_left": 147,
-      "go_straight_slow": 244,
-      "turn_right": 209,
-      "go_straight": 411,
-      "lane_change_right": 123,
-      "turn_left": 281
-    },
-    "mixed|jam": {
-      "go_straight_fast": 175,
-      "go_straight": 505,
-      "lane_change_right": 60,
-      "turn_left": 427,
-      "lane_change_left": 32,
-      "go_straight_slow": 247
-    },
-    "random_int|jam": {
-      "go_straight_fast": 305,
-      "go_straight": 53,
-      "turn_left": 335,
-      "go_straight_slow": 295,
-      "lane_change_right": 80,
-      "lane_change_left": 75
-    },
-    "highway|normal": {
-      "go_straight_fast": 271,
-      "lane_change_left": 420,
-      "lane_change_right": 491,
-      "go_straight_slow": 171
-    },
-    "curvy|empty": {
-      "go_straight_fast": 315,
-      "turn_left": 371,
-      "lane_change_right": 116,
-      "go_straight_slow": 239,
-      "lane_change_left": 131
-    },
-    "urban_x|empty": {
-      "go_straight_fast": 133,
-      "go_straight_slow": 308,
-      "lane_change_right": 182,
-      "lane_change_left": 50
-    },
-    "urban_t|dense": {
-      "lane_change_left": 325,
-      "go_straight_slow": 310,
-      "lane_change_right": 250
-    },
-    "roundabout|dense": {
-      "lane_change_left": 128,
-      "lane_change_right": 162
-    },
-    "mixed|dense": {
-      "lane_change_left": 147,
-      "lane_change_right": 25
-    },
-    "random_int|dense": {
-      "lane_change_right": 92,
-      "lane_change_left": 45
-    },
-    "highway|sparse": {
-      "lane_change_right": 280,
-      "lane_change_left": 213
+      "go_straight_fast": 639,
+      "lane_change_right": 814,
+      "go_straight": 813,
+      "turn_right": 1426,
+      "lane_change_left": 876,
+      "turn_left": 694,
+      "go_straight_slow": 523
     },
     "curvy|normal": {
-      "lane_change_right": 323,
-      "lane_change_left": 358
+      "lane_change_left": 449,
+      "turn_left": 684,
+      "go_straight": 1017,
+      "turn_right": 1172,
+      "lane_change_right": 513,
+      "go_straight_slow": 407,
+      "go_straight_fast": 483
     },
-    "urban_x|sparse": {
-      "lane_change_right": 68,
-      "lane_change_left": 67
-    },
-    "mixed|empty": {
-      "lane_change_right": 39,
-      "lane_change_left": 54
-    },
-    "random_int|sparse": {
-      "lane_change_right": 120,
-      "lane_change_left": 140
-    },
-    "urban_x|dense": {
-      "lane_change_left": 75
+    "urban_x|normal": {
+      "go_straight_fast": 344,
+      "go_straight": 786,
+      "lane_change_left": 175,
+      "go_straight_slow": 423,
+      "turn_right": 871,
+      "lane_change_right": 167,
+      "turn_left": 453
     },
     "urban_t|jam": {
-      "lane_change_left": 15
+      "go_straight_fast": 454,
+      "go_straight": 1132,
+      "go_straight_slow": 420,
+      "turn_right": 590,
+      "turn_left": 269,
+      "lane_change_right": 235,
+      "lane_change_left": 150
+    },
+    "roundabout|normal": {
+      "go_straight_fast": 500,
+      "go_straight": 351,
+      "lane_change_right": 339,
+      "go_straight_slow": 503,
+      "turn_right": 540,
+      "turn_left": 802,
+      "lane_change_left": 401
+    },
+    "mixed|sparse": {
+      "go_straight_fast": 974,
+      "go_straight": 566,
+      "go_straight_slow": 1059,
+      "turn_left": 1146,
+      "turn_right": 956,
+      "lane_change_left": 358,
+      "lane_change_right": 279
+    },
+    "random_int|empty": {
+      "go_straight_fast": 1508,
+      "go_straight": 460,
+      "turn_right": 491,
+      "go_straight_slow": 950,
+      "turn_left": 1169,
+      "lane_change_right": 388,
+      "lane_change_left": 393
+    },
+    "highway|empty": {
+      "go_straight_fast": 526,
+      "lane_change_left": 643,
+      "go_straight": 739,
+      "go_straight_slow": 463,
+      "lane_change_right": 608
+    },
+    "curvy|sparse": {
+      "go_straight_fast": 416,
+      "go_straight": 658,
+      "turn_left": 1128,
+      "lane_change_right": 759,
+      "go_straight_slow": 335,
+      "lane_change_left": 724,
+      "turn_right": 1254
+    },
+    "urban_x|empty": {
+      "go_straight_fast": 1197,
+      "go_straight": 447,
+      "go_straight_slow": 914,
+      "turn_left": 676,
+      "lane_change_left": 191,
+      "turn_right": 191,
+      "lane_change_right": 345
+    },
+    "urban_t|dense": {
+      "go_straight_fast": 315,
+      "turn_left": 623,
+      "go_straight": 783,
+      "go_straight_slow": 392,
+      "turn_right": 728,
+      "lane_change_right": 161,
+      "lane_change_left": 290
+    },
+    "roundabout|jam": {
+      "go_straight": 677,
+      "go_straight_slow": 532,
+      "lane_change_left": 466,
+      "go_straight_fast": 432,
+      "turn_right": 209,
+      "turn_left": 309,
+      "lane_change_right": 485
+    },
+    "mixed|normal": {
+      "lane_change_left": 428,
+      "go_straight_fast": 422,
+      "go_straight": 762,
+      "go_straight_slow": 359,
+      "turn_left": 601,
+      "turn_right": 1048,
+      "lane_change_right": 170
+    },
+    "random_int|dense": {
+      "go_straight_fast": 418,
+      "go_straight": 809,
+      "turn_right": 524,
+      "go_straight_slow": 411,
+      "turn_left": 280,
+      "lane_change_right": 615,
+      "lane_change_left": 468
+    },
+    "curvy|empty": {
+      "go_straight_fast": 318,
+      "go_straight_slow": 432,
+      "turn_left": 509,
+      "lane_change_left": 162,
+      "lane_change_right": 244
+    },
+    "urban_t|sparse": {
+      "go_straight_fast": 279,
+      "go_straight_slow": 270,
+      "turn_left": 345,
+      "lane_change_right": 207,
+      "lane_change_left": 134
+    },
+    "highway|normal": {
+      "go_straight_fast": 173,
+      "lane_change_right": 423,
+      "lane_change_left": 437,
+      "go_straight_slow": 70
+    },
+    "curvy|dense": {
+      "go_straight_fast": 243,
+      "lane_change_right": 734,
+      "turn_left": 312,
+      "go_straight_slow": 168,
+      "lane_change_left": 1065
+    },
+    "urban_t|empty": {
+      "go_straight_fast": 359,
+      "go_straight_slow": 671,
+      "lane_change_right": 156,
+      "lane_change_left": 85
+    },
+    "urban_x|dense": {
+      "lane_change_right": 341,
+      "lane_change_left": 191,
+      "go_straight_slow": 249
+    },
+    "roundabout|sparse": {
+      "lane_change_right": 249,
+      "go_straight_slow": 213,
+      "lane_change_left": 175
+    },
+    "mixed|empty": {
+      "go_straight_slow": 236,
+      "lane_change_left": 65,
+      "lane_change_right": 40
+    },
+    "highway|jam": {
+      "lane_change_left": 346,
+      "lane_change_right": 333
+    },
+    "random_int|sparse": {
+      "lane_change_right": 368,
+      "lane_change_left": 375
+    },
+    "mixed|jam": {
+      "lane_change_left": 78,
+      "lane_change_right": 172
+    },
+    "urban_x|jam": {
+      "lane_change_right": 96,
+      "lane_change_left": 95
+    },
+    "urban_t|normal": {
+      "lane_change_right": 192,
+      "lane_change_left": 259
+    },
+    "mixed|dense": {
+      "lane_change_right": 177,
+      "lane_change_left": 181
+    },
+    "random_int|jam": {
+      "lane_change_left": 21,
+      "lane_change_right": 50
+    },
+    "random_int|normal": {
+      "lane_change_right": 88,
+      "lane_change_left": 87
+    },
+    "curvy|jam": {
+      "lane_change_left": 58,
+      "lane_change_right": 50
+    },
+    "roundabout|empty": {
+      "lane_change_right": 75,
+      "lane_change_left": 59
+    },
+    "highway|sparse": {
+      "lane_change_right": 127,
+      "lane_change_left": 72
+    },
+    "urban_x|sparse": {
+      "lane_change_left": 43
     }
   },
   "per_driver_style": {
     "aggressive": {
-      "go_straight_fast": 386,
-      "lane_change_right": 531,
-      "go_straight": 268,
-      "turn_right": 591,
-      "lane_change_left": 689,
-      "turn_left": 458,
-      "go_straight_slow": 432
+      "go_straight_fast": 1142,
+      "lane_change_right": 1852,
+      "go_straight": 1370,
+      "turn_right": 1809,
+      "lane_change_left": 1520,
+      "turn_left": 1684,
+      "go_straight_slow": 1311
     },
     "timid": {
-      "go_straight_fast": 509,
-      "lane_change_left": 167,
-      "go_straight": 559,
-      "go_straight_slow": 534,
-      "turn_left": 554,
-      "turn_right": 469,
-      "lane_change_right": 280
+      "go_straight_fast": 1721,
+      "lane_change_left": 703,
+      "go_straight": 1719,
+      "go_straight_slow": 1640,
+      "turn_left": 1512,
+      "turn_right": 1486,
+      "lane_change_right": 508
     },
     "weaver": {
-      "go_straight_fast": 881,
-      "go_straight": 1091,
-      "lane_change_right": 1424,
-      "turn_left": 993,
-      "lane_change_left": 1286,
-      "go_straight_slow": 1005,
-      "turn_right": 1152
-    },
-    "normal": {
-      "lane_change_right": 627,
-      "go_straight_fast": 757,
-      "go_straight": 727,
-      "turn_left": 813,
-      "lane_change_left": 662,
-      "go_straight_slow": 570,
-      "turn_right": 503
+      "go_straight_fast": 2025,
+      "go_straight": 2598,
+      "lane_change_right": 4245,
+      "go_straight_slow": 2452,
+      "turn_left": 2590,
+      "lane_change_left": 3938,
+      "turn_right": 2530
     },
     "stop_go": {
-      "go_straight_fast": 467,
-      "go_straight": 355,
-      "turn_right": 285,
-      "go_straight_slow": 459,
-      "turn_left": 182,
-      "lane_change_right": 138,
-      "lane_change_left": 196
+      "go_straight_fast": 1854,
+      "go_straight": 1743,
+      "lane_change_left": 1091,
+      "go_straight_slow": 1960,
+      "turn_right": 1718,
+      "lane_change_right": 1091,
+      "turn_left": 1406
+    },
+    "normal": {
+      "go_straight_fast": 3258,
+      "go_straight": 2570,
+      "go_straight_slow": 2637,
+      "turn_right": 2457,
+      "lane_change_left": 2748,
+      "lane_change_right": 2304,
+      "turn_left": 2808
     }
   }
 }

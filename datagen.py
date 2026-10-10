@@ -943,8 +943,8 @@ def run_regime(cfg, regime, seed0, n_ep, rng, ds: Dataset, calib: Optional[Calib
 def parse_args():
     p = argparse.ArgumentParser(description="MetaDrive goal-prediction dataset collector")
     p.add_argument("--out", default="goal_dataset")
-    p.add_argument("--samples-per-class", type=int, default=3000, help="quota for each of the 7 instructions")
-    p.add_argument("--max-episodes", type=int, default=100000)
+    p.add_argument("--samples-per-class", type=int, default=10000, help="quota for each of the 7 instructions")
+    p.add_argument("--max-episodes", type=int, default=1000000)
     p.add_argument("--episodes-per-env", type=int, default=10, help="episodes (seeds) per env/regime instance")
     p.add_argument("--max-steps", type=int, default=1500, help="env steps per episode (0.1 s each)")
     p.add_argument("--horizon-s", type=float, default=5.0)
