@@ -322,7 +322,7 @@ def add_hud(img: np.ndarray, sample: Dict[str, Any]) -> np.ndarray:
 def parse_args():
     parser = argparse.ArgumentParser(description="MetaDrive BEV Dataset Visualizer & Goal Prediction Inference")
     parser.add_argument("--json", required=True, help="Path to input .json, .jsonl, or .jsonl.gz dataset file")
-    parser.add_argument("--sample-idx", type=int, default=0, help="Record index if reading a .jsonl file")
+    parser.add_argument("--sample-idx", type=int, default=100, help="Record index if reading a .jsonl file")
     parser.add_argument("--out", default="bev_visualization.png", help="Path to save BEV output image")
     parser.add_argument("--crop-size", type=float, default=90.0, help="Default BEV view extent in meters")
     parser.add_argument("--show", action="store_true", help="Display image in interactive desktop window")
