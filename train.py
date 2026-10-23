@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import random
+from dataclasses import dataclass
 from typing import Dict, Iterator, Any
 
 import torch
@@ -24,6 +26,20 @@ INSTRUCTION_TO_ID = {
 }
 
 
+@dataclass(frozen=True)
+class NormalizationStats:
+    """Per-feature statistics fitted on the training split."""
+
+    ego_state_mean: torch.Tensor
+    ego_state_std: torch.Tensor
+    history_positions_mean: torch.Tensor
+    history_positions_std: torch.Tensor
+    history_speeds_mean: torch.Tensor
+    history_speeds_std: torch.Tensor
+    target_mean: torch.Tensor
+    target_std: torch.Tensor
+
+
 class GoalPredictionDataset(IterableDataset):
     """
     Streams goal-prediction samples from JSONL dataset shards.
@@ -31,7 +47,7 @@ class GoalPredictionDataset(IterableDataset):
     Each sample contains:
 
         inputs:
-            ego_state:       [11]
+            ego_state:       [12]
             lidar:            [240]
             instruction_id:  scalar integer
             history_positions:[3, 2]
@@ -45,7 +61,13 @@ class GoalPredictionDataset(IterableDataset):
     into the future.
     """
 
-    def __init__(self, dataset_dir: str | Path = DATASET_DIR):
+    def __init__(
+        self,
+        dataset_dir: str | Path = DATASET_DIR,
+        normalization_stats: NormalizationStats | None = None,
+        shuffle_buffer_size: int = 10_000,
+        seed: int = 42,
+    ):
         super().__init__()
 
         self.dataset_dir = Path(dataset_dir)
@@ -61,6 +83,14 @@ class GoalPredictionDataset(IterableDataset):
             raise FileNotFoundError(
                 f"No JSONL shards found in: {self.dataset_dir}"
             )
+
+        if shuffle_buffer_size < 0:
+            raise ValueError("shuffle_buffer_size must be non-negative")
+
+        self.normalization_stats = normalization_stats
+        self.shuffle_buffer_size = shuffle_buffer_size
+        self.seed = seed
+
 
     def _get_ego_state(self, sample: Dict[str, Any]) -> torch.Tensor:
         ego_state = sample["ego_state"]
@@ -142,7 +172,11 @@ class GoalPredictionDataset(IterableDataset):
             "lidar": torch.tensor(lidar, dtype=torch.float32),
         }
 
-    def _convert_sample(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_sample(
+        self,
+        sample: Dict[str, Any],
+        normalize: bool = True,
+    ) -> Dict[str, Any]:
         history = self._get_history(sample)
 
         label = sample["label"]["future_position_ego"]
@@ -153,7 +187,7 @@ class GoalPredictionDataset(IterableDataset):
                 f"but received {len(label)} values"
             )
 
-        return {
+        converted = {
             "ego_state": self._get_ego_state(sample),
             "lidar": self._get_lidar(sample),
             "instruction": self._get_instruction_id(sample),
@@ -163,7 +197,25 @@ class GoalPredictionDataset(IterableDataset):
             "target": torch.tensor(label, dtype=torch.float32),
         }
 
-    def __iter__(self) -> Iterator[Dict[str, Any]]:
+        if normalize and self.normalization_stats is not None:
+            stats = self.normalization_stats
+            converted["ego_state"] = (
+                converted["ego_state"] - stats.ego_state_mean
+            ) / stats.ego_state_std
+            converted["history_positions"] = (
+                converted["history_positions"]
+                - stats.history_positions_mean
+            ) / stats.history_positions_std
+            converted["history_speeds"] = (
+                converted["history_speeds"] - stats.history_speeds_mean
+            ) / stats.history_speeds_std
+            converted["target"] = (
+                converted["target"] - stats.target_mean
+            ) / stats.target_std
+
+        return converted
+
+    def _iter_samples(self) -> Iterator[Dict[str, Any]]:
         worker_info = get_worker_info()
 
         if worker_info is None:
@@ -194,13 +246,92 @@ class GoalPredictionDataset(IterableDataset):
 
                     yield self._convert_sample(sample)
 
+    def __iter__(self) -> Iterator[Dict[str, Any]]:
+        samples = self._iter_samples()
+
+        if self.shuffle_buffer_size == 0:
+            yield from samples
+            return
+
+        worker_info = get_worker_info()
+        worker_id = 0 if worker_info is None else worker_info.id
+        rng = random.Random(self.seed + worker_id)
+        buffer = []
+
+        for sample in samples:
+            if len(buffer) < self.shuffle_buffer_size:
+                buffer.append(sample)
+                continue
+
+            index = rng.randrange(len(buffer))
+            yield buffer[index]
+            buffer[index] = sample
+
+        while buffer:
+            yield buffer.pop(rng.randrange(len(buffer)))
+
+
+def fit_normalization_stats(
+    dataset_dir: str | Path = DATASET_DIR,
+) -> NormalizationStats:
+    """Fit continuous-feature statistics from a training dataset stream."""
+
+    dataset = GoalPredictionDataset(
+        dataset_dir,
+        shuffle_buffer_size=0,
+    )
+    sums = {
+        "ego_state": torch.zeros(12, dtype=torch.float64),
+        "history_positions": torch.zeros(2, dtype=torch.float64),
+        "history_speeds": torch.zeros(1, dtype=torch.float64),
+        "target": torch.zeros(2, dtype=torch.float64),
+    }
+    squared_sums = {name: values.clone() for name, values in sums.items()}
+    counts = {name: 0 for name in sums}
+
+    for sample in dataset._iter_samples():
+        values = {
+            "ego_state": sample["ego_state"].double(),
+            "history_positions": sample["history_positions"].double().reshape(-1, 2),
+            "history_speeds": sample["history_speeds"].double().reshape(-1, 1),
+            "target": sample["target"].double().reshape(-1, 2),
+        }
+
+        for name, tensor in values.items():
+            sums[name] += tensor.sum(dim=0)
+            squared_sums[name] += (tensor * tensor).sum(dim=0)
+            counts[name] += tensor.shape[0]
+
+    if counts["ego_state"] == 0:
+        raise ValueError(f"No samples found in: {dataset.dataset_dir}")
+
+    stats = {}
+    for name in sums:
+        mean = sums[name] / counts[name]
+        variance = squared_sums[name] / counts[name] - mean.square()
+        stats[f"{name}_mean"] = mean.float()
+        stats[f"{name}_std"] = variance.clamp_min(1e-12).sqrt().float()
+
+    return NormalizationStats(**stats)
+
 
 def create_dataloader(
     dataset_dir: str | Path = DATASET_DIR,
     batch_size: int = 32,
     num_workers: int = 0,
+    normalization_stats: NormalizationStats | None = None,
+    shuffle_buffer_size: int = 10_000,
+    seed: int = 42,
 ) -> DataLoader:
-    dataset = GoalPredictionDataset(dataset_dir)
+    if normalization_stats is None:
+        normalization_stats = fit_normalization_stats(dataset_dir)
+
+    dataset = GoalPredictionDataset(
+        dataset_dir,
+        normalization_stats=normalization_stats,
+        shuffle_buffer_size=shuffle_buffer_size,
+        seed=seed,
+    )
 
     return DataLoader(
         dataset,
