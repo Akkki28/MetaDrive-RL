@@ -479,6 +479,10 @@ def train_model(
     model = GoalPointPredictor().to(selected_device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    best_loss = float("inf")
+    best_state_dict = None
+
     epoch_bar = tqdm(range(epochs), desc="Training", unit="epoch")
     for epoch in epoch_bar:
         loss = train_one_epoch(
@@ -489,24 +493,38 @@ def train_model(
         )
         epoch_bar.set_postfix(loss=f"{loss:.4f}")
 
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "model_config": {
-                "ego_state_dim": 12,
-                "history_length": HISTORY_LENGTH,
-                "instruction_count": NUM_INSTRUCTIONS,
-            },
-            "normalization_stats": {
-                name: getattr(normalization_stats, name)
-                for name in NormalizationStats.__dataclass_fields__
-            },
-        },
-        MODEL_PATH,
-    )
-    print(f"saved model checkpoint to {MODEL_PATH}")
+        if loss < best_loss:
+            best_loss = loss
+            best_state_dict = {
+                name: parameter.detach().clone()
+                for name, parameter in model.state_dict().items()
+            }
+            torch.save(
+                {
+                    "model_state_dict": best_state_dict,
+                    "model_config": {
+                        "ego_state_dim": 12,
+                        "history_length": HISTORY_LENGTH,
+                        "instruction_count": NUM_INSTRUCTIONS,
+                    },
+                    "normalization_stats": {
+                        name: getattr(normalization_stats, name)
+                        for name in NormalizationStats.__dataclass_fields__
+                    },
+                },
+                MODEL_PATH,
+            )
+            print(
+                f"saved best model checkpoint to {MODEL_PATH} "
+                f"(epoch {epoch + 1}, loss {loss:.4f})"
+            )
+
+    if best_state_dict is None:
+        raise RuntimeError("No best model checkpoint was created")
+
+    model.load_state_dict(best_state_dict)
 
     return model
 
-train_model(epochs=100,batch_size=32,learning_rate=1e-3)
+if __name__ == "__main__":
+    train_model(epochs=10, batch_size=32, learning_rate=1e-3)

@@ -93,12 +93,19 @@ def load_sample(file_path: str, sample_idx: int = 0) -> Dict[str, Any]:
 # --------------------------------------------------------------------------------------
 # MetaDrive BEV Renderer
 # --------------------------------------------------------------------------------------
-def render_metadrive_bev(sample: Dict[str, Any], film_size_px: int = 1200, default_crop_m: float = 90.0) -> np.ndarray:
+def render_metadrive_bev(
+    sample: Dict[str, Any],
+    film_size_px: int = 1200,
+    default_crop_m: float = 90.0,
+    predicted_goal_ego: Optional[List[float]] = None,
+) -> np.ndarray:
     """
-    Renders MetaDrive top-down BEV view with road network, ego, path, goal, and surrounding vehicles.
+    Renders a focused top-down view with lanes, vehicles, and both goal points.
     """
     meta = sample.get("meta", {})
     map_spec = meta.get("map", "S")
+    if isinstance(map_spec, str) and map_spec.isdigit():
+        map_spec = int(map_spec)
     scenario_id = sample.get("scenario_id", "seed_0")
     
     # Parse seed from scenario_id if present (e.g. "seed_1" -> 1)
@@ -128,18 +135,29 @@ def render_metadrive_bev(sample: Dict[str, Any], film_size_px: int = 1200, defau
         ego_pos = np.array(ego_state["position"], dtype=float)
         ego_heading = float(ego_state["heading"])
 
-        # Determine Goal World Position
+        # Determine target and predicted goal positions in world coordinates.
         label = sample.get("label", {})
         goal_wpos = label.get("future_position")
         if goal_wpos is None and "future_position_ego" in label:
             goal_wpos = ego_to_world(label["future_position_ego"], ego_pos, ego_heading)
-        else:
+        elif goal_wpos is not None:
             goal_wpos = np.array(goal_wpos, dtype=float)
+        predicted_wpos = (
+            ego_to_world(predicted_goal_ego, ego_pos, ego_heading)
+            if predicted_goal_ego is not None
+            else None
+        )
 
-        # Center view between Ego and Goal
-        if goal_wpos is not None:
-            center_pos = (ego_pos + goal_wpos) / 2.0
-            dist_ego_goal = float(np.linalg.norm(goal_wpos - ego_pos))
+        goal_positions = [
+            position for position in (goal_wpos, predicted_wpos)
+            if position is not None
+        ]
+        if goal_positions:
+            center_pos = np.mean([ego_pos] + goal_positions, axis=0)
+            dist_ego_goal = max(
+                float(np.linalg.norm(position - ego_pos))
+                for position in goal_positions
+            )
         else:
             center_pos = ego_pos
             dist_ego_goal = 30.0
@@ -171,68 +189,29 @@ def render_metadrive_bev(sample: Dict[str, Any], film_size_px: int = 1200, defau
                         pygame.draw.line(surface, color, surface.vec2pix(poly[i]), surface.vec2pix(poly[i + 1]), stroke)
 
         # --------------------------------------------------
-        # 2. Render Past History Trajectory
-        # --------------------------------------------------
-        history = sample.get("history", {})
-        hist_positions = history.get("ego_positions", [])
-        if hist_positions:
-            pts = [surface.pos2pix(p[0], p[1]) for p in hist_positions]
-            if len(pts) > 1:
-                pygame.draw.lines(surface, (0, 180, 255), False, pts, 4)
-            for pt in pts:
-                pygame.draw.circle(surface, (0, 220, 255), pt, 4)
-
-        # --------------------------------------------------
-        # 3. Render Reference Lane Path & Checkpoints
-        # --------------------------------------------------
-        checkpoints = sample.get("lane_features", {}).get("checkpoints", [])
-        cp_world_pts = []
-        for cp in checkpoints:
-            w_pt = ego_to_world([cp["rel_x"], cp["rel_y"]], ego_pos, ego_heading)
-            cp_world_pts.append(w_pt)
-
-        if cp_world_pts:
-            pts = [surface.pos2pix(p[0], p[1]) for p in [ego_pos] + cp_world_pts]
-            pygame.draw.lines(surface, (40, 210, 80), False, pts, 3)
-            for pt in pts[1:]:
-                pygame.draw.circle(surface, (50, 255, 100), pt, 6)
-
-        # --------------------------------------------------
-        # 4. Render Surrounding Vehicles
+        # 2. Render surrounding vehicles.
         # --------------------------------------------------
         other_vehicles = sample.get("lidar", {}).get("other_vehicles", [])
         for ov in other_vehicles:
             rel_pos = ov.get("rel_position", [0.0, 0.0])
             if abs(rel_pos[0]) < 1e-3 and abs(rel_pos[1]) < 1e-3:
-                continue # Skip empty slot
-            
-            ov_wpos = ego_to_world(rel_pos, ego_pos, ego_heading)
-            rel_vel = ov.get("rel_velocity", [0.0, 0.0])
-            
-            if abs(rel_vel[0]) > 0.5 or abs(rel_vel[1]) > 0.5:
-                ov_heading = ego_heading + math.atan2(rel_vel[1], rel_vel[0])
-            else:
-                ov_heading = ego_heading
+                continue
 
-            # Vehicle polygon corners (4.5m x 2.0m)
+            ov_wpos = ego_to_world(rel_pos, ego_pos, ego_heading)
             half_l, half_w = 2.25, 1.0
-            raw_corners = [[half_l, half_w], [half_l, -half_w], [-half_l, -half_w], [-half_l, half_w]]
+            raw_corners = [
+                [half_l, half_w], [half_l, -half_w],
+                [-half_l, -half_w], [-half_l, half_w],
+            ]
+            ov_heading = ego_heading
             ov_corners = [ego_to_world(c, ov_wpos, ov_heading) for c in raw_corners]
             ov_pix_corners = [surface.pos2pix(c[0], c[1]) for c in ov_corners]
 
             pygame.draw.polygon(surface, (180, 80, 230), ov_pix_corners)
             pygame.draw.polygon(surface, (255, 255, 255), ov_pix_corners, 1)
 
-            # Velocity arrow
-            if "rel_velocity" in ov and (abs(rel_vel[0]) > 0.1 or abs(rel_vel[1]) > 0.1):
-                ov_pix = surface.pos2pix(ov_wpos[0], ov_wpos[1])
-                ov_wvel = ego_to_world(rel_vel, [0, 0], ego_heading)
-                vel_end = [ov_wpos[0] + ov_wvel[0] * 0.8, ov_wpos[1] + ov_wvel[1] * 0.8]
-                vel_end_pix = surface.pos2pix(vel_end[0], vel_end[1])
-                pygame.draw.line(surface, (255, 120, 255), ov_pix, vel_end_pix, 3)
-
         # --------------------------------------------------
-        # 5. Render Ego Vehicle
+        # 3. Render ego vehicle.
         # --------------------------------------------------
         half_l, half_w = 2.3, 1.05
         raw_corners = [[half_l, half_w], [half_l, -half_w], [-half_l, -half_w], [-half_l, half_w]]
@@ -243,24 +222,21 @@ def render_metadrive_bev(sample: Dict[str, Any], film_size_px: int = 1200, defau
         pygame.draw.polygon(surface, (235, 40, 40), ego_pix_corners)
         pygame.draw.polygon(surface, (255, 255, 255), ego_pix_corners, 2)
 
-        # Heading vector arrow
+        # --------------------------------------------------
+        # 4. Render target and predicted goals.
+        # --------------------------------------------------
         ego_pix = surface.pos2pix(ego_pos[0], ego_pos[1])
-        arrow_end = [ego_pos[0] + 6.0 * math.cos(ego_heading), ego_pos[1] + 6.0 * math.sin(ego_heading)]
-        arrow_end_pix = surface.pos2pix(arrow_end[0], arrow_end[1])
-        pygame.draw.line(surface, (255, 255, 255), ego_pix, arrow_end_pix, 3)
-
-        # --------------------------------------------------
-        # 6. Render Goal Target
-        # --------------------------------------------------
         if goal_wpos is not None:
             goal_pix = surface.pos2pix(goal_wpos[0], goal_wpos[1])
-            # Connecting line Ego -> Goal
-            pygame.draw.line(surface, (255, 215, 0), ego_pix, goal_pix, 2)
-
-            # Concentric target bullseye
             pygame.draw.circle(surface, (255, 215, 0), goal_pix, 16, 3)
-            pygame.draw.circle(surface, (255, 60, 0), goal_pix, 10, 2)
-            pygame.draw.circle(surface, (255, 235, 0), goal_pix, 4)
+            pygame.draw.circle(surface, (255, 215, 0), goal_pix, 5)
+
+        if predicted_goal_ego is not None:
+            predicted_pix = surface.pos2pix(
+                predicted_wpos[0], predicted_wpos[1]
+            )
+            pygame.draw.circle(surface, (40, 180, 255), predicted_pix, 14, 3)
+            pygame.draw.circle(surface, (40, 180, 255), predicted_pix, 4)
 
         # Convert pygame surface to OpenCV BGR image
         return WorldSurface.to_cv2_image(surface)
@@ -273,7 +249,7 @@ def render_metadrive_bev(sample: Dict[str, Any], film_size_px: int = 1200, defau
 # HUD Banner Overlay
 # --------------------------------------------------------------------------------------
 def add_hud(img: np.ndarray, sample: Dict[str, Any]) -> np.ndarray:
-    """Adds a clean metadata and legend HUD banner to the visualization."""
+    """Adds a compact metadata and focused legend to the visualization."""
     h, w, _ = img.shape
     bar_h = 100
     canvas = np.zeros((h + bar_h, w, 3), dtype=np.uint8)
@@ -301,10 +277,9 @@ def add_hud(img: np.ndarray, sample: Dict[str, Any]) -> np.ndarray:
     ly = 90
     items = [
         ("Ego Vehicle", (40, 40, 235)),
-        ("Goal (5.0s)", (0, 215, 255)),
+        ("Target goal", (0, 215, 255)),
+        ("Predicted goal", (255, 180, 40)),
         ("Other Vehicles", (230, 80, 180)),
-        ("Lane Checkpoints", (80, 210, 40)),
-        ("History Trail", (255, 180, 0)),
     ]
     
     lx = 20
