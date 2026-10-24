@@ -7,6 +7,7 @@ from typing import Dict, Iterator, Any
 import torch
 from torch import Tensor, nn
 from torch.utils.data import IterableDataset, DataLoader, get_worker_info
+from tqdm import tqdm
 
 
 DATASET_DIR = Path(__file__).parent / "goal_dataset" / "train"
@@ -30,7 +31,6 @@ INSTRUCTION_TO_ID = {
 
 
 class GoalPointPredictor(nn.Module):
-    """Predict a future ego-frame goal from lidar, ego state, and an instruction."""
 
     def __init__(
         self,
@@ -88,7 +88,6 @@ class GoalPointPredictor(nn.Module):
         history_speeds: Tensor,
         instruction: Tensor,
     ) -> Tensor:
-        """Return normalized future ego-frame coordinates with shape [batch, 2]."""
         if history_positions.shape[1] != self.history_length:
             raise ValueError(
                 f"Expected {self.history_length} history steps, "
@@ -122,8 +121,6 @@ class GoalPointPredictor(nn.Module):
 
 @dataclass(frozen=True)
 class NormalizationStats:
-    """Per-feature statistics fitted on the training split."""
-
     ego_state_mean: torch.Tensor
     ego_state_std: torch.Tensor
     history_positions_mean: torch.Tensor
@@ -135,26 +132,6 @@ class NormalizationStats:
 
 
 class GoalPredictionDataset(IterableDataset):
-    """
-    Streams goal-prediction samples from JSONL dataset shards.
-
-    Each sample contains:
-
-        inputs:
-            ego_state:       [12]
-            lidar:            [240]
-            instruction_id:  scalar integer
-            history_positions:[3, 2]
-            history_speeds:   [3]
-            history_lidar:    [3, 240] (loaded for compatibility, not used)
-
-        target:
-            future_position_ego: [2]
-
-    The target is the ego-frame position of the vehicle 5 seconds
-    into the future.
-    """
-
     def __init__(
         self,
         dataset_dir: str | Path = DATASET_DIR,
@@ -502,14 +479,15 @@ def train_model(
     model = GoalPointPredictor().to(selected_device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    for epoch in range(epochs):
+    epoch_bar = tqdm(range(epochs), desc="Training", unit="epoch")
+    for epoch in epoch_bar:
         loss = train_one_epoch(
             model=model,
             dataloader=dataloader,
             optimizer=optimizer,
             device=selected_device,
         )
-        print(f"epoch {epoch + 1}/{epochs} - loss: {loss:.4f}")
+        epoch_bar.set_postfix(loss=f"{loss:.4f}")
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -530,3 +508,5 @@ def train_model(
     print(f"saved model checkpoint to {MODEL_PATH}")
 
     return model
+
+train_model(epochs=100,batch_size=32,learning_rate=1e-3)
