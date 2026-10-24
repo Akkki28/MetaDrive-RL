@@ -5,10 +5,13 @@ from dataclasses import dataclass
 from typing import Dict, Iterator, Any
 
 import torch
+from torch import Tensor, nn
 from torch.utils.data import IterableDataset, DataLoader, get_worker_info
 
 
 DATASET_DIR = Path(__file__).parent / "goal_dataset" / "train"
+MODEL_DIR = Path(__file__).parent / "model"
+MODEL_PATH = MODEL_DIR / "goal_point_predictor.pt"
 
 NUM_LIDAR_POINTS = 240
 HISTORY_LENGTH = 3
@@ -24,6 +27,97 @@ INSTRUCTION_TO_ID = {
     "lane_change_left": 5,
     "lane_change_right": 6,
 }
+
+
+class GoalPointPredictor(nn.Module):
+    """Predict a future ego-frame goal from lidar, ego state, and an instruction."""
+
+    def __init__(
+        self,
+        ego_state_dim: int = 12,
+        history_length: int = HISTORY_LENGTH,
+        instruction_count: int = NUM_INSTRUCTIONS,
+        model_dim: int = 128,
+        instruction_dim: int = 32,
+        attention_heads: int = 4,
+    ):
+        super().__init__()
+
+        if model_dim % attention_heads != 0:
+            raise ValueError("model_dim must be divisible by attention_heads")
+
+        self.lidar_token = nn.Sequential(
+            nn.Linear(1, model_dim),
+            nn.LayerNorm(model_dim),
+            nn.GELU(),
+        )
+        self.ego_token = nn.Sequential(
+            nn.Linear(ego_state_dim, model_dim),
+            nn.LayerNorm(model_dim),
+            nn.GELU(),
+        )
+        self.history_token = nn.Sequential(
+            nn.Linear(3, model_dim),
+            nn.LayerNorm(model_dim),
+            nn.GELU(),
+        )
+
+        self.lidar_to_ego_attention = nn.MultiheadAttention(
+            embed_dim=model_dim,
+            num_heads=attention_heads,
+            batch_first=True,
+        )
+        self.attention_norm = nn.LayerNorm(model_dim)
+        self.instruction_embedding = nn.Embedding(
+            instruction_count,
+            instruction_dim,
+        )
+        self.goal_head = nn.Sequential(
+            nn.Linear(model_dim + instruction_dim, model_dim),
+            nn.GELU(),
+            nn.Linear(model_dim, 2),
+        )
+
+        self.history_length = history_length
+
+    def forward(
+        self,
+        lidar: Tensor,
+        ego_state: Tensor,
+        history_positions: Tensor,
+        history_speeds: Tensor,
+        instruction: Tensor,
+    ) -> Tensor:
+        """Return normalized future ego-frame coordinates with shape [batch, 2]."""
+        if history_positions.shape[1] != self.history_length:
+            raise ValueError(
+                f"Expected {self.history_length} history steps, "
+                f"but received {history_positions.shape[1]}"
+            )
+
+        lidar_tokens = self.lidar_token(lidar.unsqueeze(-1))
+        history_features = torch.cat(
+            (history_positions, history_speeds.unsqueeze(-1)),
+            dim=-1,
+        )
+        ego_tokens = torch.cat(
+            (
+                self.ego_token(ego_state).unsqueeze(1),
+                self.history_token(history_features),
+            ),
+            dim=1,
+        )
+
+        attended_ego, _ = self.lidar_to_ego_attention(
+            query=ego_tokens,
+            key=lidar_tokens,
+            value=lidar_tokens,
+        )
+        fused_ego = self.attention_norm(ego_tokens + attended_ego).mean(dim=1)
+        instruction_features = self.instruction_embedding(instruction)
+        return self.goal_head(
+            torch.cat((fused_ego, instruction_features), dim=-1)
+        )
 
 
 @dataclass(frozen=True)
@@ -52,7 +146,7 @@ class GoalPredictionDataset(IterableDataset):
             instruction_id:  scalar integer
             history_positions:[3, 2]
             history_speeds:   [3]
-            history_lidar:    [3, 240]
+            history_lidar:    [3, 240] (loaded for compatibility, not used)
 
         target:
             future_position_ego: [2]
@@ -340,3 +434,99 @@ def create_dataloader(
         shuffle=False,
         pin_memory=torch.cuda.is_available(),
     )
+
+
+def train_one_epoch(
+    model: GoalPointPredictor,
+    dataloader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+) -> float:
+    """Run one supervised training pass and return the mean normalized loss."""
+    model.train()
+    criterion = nn.SmoothL1Loss()
+    total_loss = 0.0
+    batch_count = 0
+
+    for batch in dataloader:
+        lidar = batch["lidar"].to(device)
+        ego_state = batch["ego_state"].to(device)
+        history_positions = batch["history_positions"].to(device)
+        history_speeds = batch["history_speeds"].to(device)
+        instruction = batch["instruction"].to(device)
+        target = batch["target"].to(device)
+
+        optimizer.zero_grad(set_to_none=True)
+        prediction = model(
+            lidar=lidar,
+            ego_state=ego_state,
+            history_positions=history_positions,
+            history_speeds=history_speeds,
+            instruction=instruction,
+        )
+        loss = criterion(prediction, target)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        batch_count += 1
+
+    if batch_count == 0:
+        raise ValueError("The DataLoader produced no batches")
+
+    return total_loss / batch_count
+
+
+def train_model(
+    dataset_dir: str | Path = DATASET_DIR,
+    epochs: int = 10,
+    batch_size: int = 32,
+    learning_rate: float = 1e-3,
+    device: str | torch.device | None = None,
+) -> GoalPointPredictor:
+    """Build the DataLoader and train a goal predictor for a few epochs."""
+    if epochs <= 0:
+        raise ValueError("epochs must be positive")
+
+    selected_device = torch.device(
+        device if device is not None else (
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+    )
+    normalization_stats = fit_normalization_stats(dataset_dir)
+    dataloader = create_dataloader(
+        dataset_dir=dataset_dir,
+        batch_size=batch_size,
+        normalization_stats=normalization_stats,
+    )
+    model = GoalPointPredictor().to(selected_device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+
+    for epoch in range(epochs):
+        loss = train_one_epoch(
+            model=model,
+            dataloader=dataloader,
+            optimizer=optimizer,
+            device=selected_device,
+        )
+        print(f"epoch {epoch + 1}/{epochs} - loss: {loss:.4f}")
+
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "model_config": {
+                "ego_state_dim": 12,
+                "history_length": HISTORY_LENGTH,
+                "instruction_count": NUM_INSTRUCTIONS,
+            },
+            "normalization_stats": {
+                name: getattr(normalization_stats, name)
+                for name in NormalizationStats.__dataclass_fields__
+            },
+        },
+        MODEL_PATH,
+    )
+    print(f"saved model checkpoint to {MODEL_PATH}")
+
+    return model
