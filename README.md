@@ -6,7 +6,7 @@ This project uses the MetaDrive simulator to generate driving data and train a n
 
 The model is conditioned on a discrete driving instruction that describes the intended maneuver (Fixed before training). the Goals predicted are conditioned based on the instruction given to the model
 
-<img width="576" height="211" alt="image" src="https://github.com/user-attachments/assets/5720ce8c-b8bd-42ea-afb5-e825c98351f6" />
+<img width="1152" height="422" alt="image" src="https://github.com/user-attachments/assets/5720ce8c-b8bd-42ea-afb5-e825c98351f6" />
 
 ## Model Architecture
 
